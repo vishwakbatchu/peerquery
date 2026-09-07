@@ -1,0 +1,40 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #f6f2ea;
+  font-family: Inter, system-ui, sans-serif;
+  color: #20232b;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+input,
+textarea,
+button {
+  font-family: inherit;
+}
+
+::selection {
+  background: #c98a2c33;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #dfd8c8;
+  border-top-color: #c98a2c;
+  animation: spin 0.8s linear infinite;
+}
