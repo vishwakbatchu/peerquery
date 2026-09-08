@@ -1,13 +1,12 @@
 import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { api } from "../lib/api";
+import { supabase } from "../lib/supabase";
 import { COLORS } from "../lib/theme";
 import { PrimaryButton } from "../components/UI";
 
 export default function LoginPage() {
-  const { token, persist } = useAuth();
-  const navigate = useNavigate();
+  const { token } = useAuth();
   const [mode, setMode] = useState("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -24,15 +23,27 @@ export default function LoginPage() {
 
     try {
       if (mode === "login") {
-        // Custom backend login — expects { token, user } back
-        const session = await api.login({ email, password });
-        persist(session);
-        navigate("/");
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw new Error(error.message);
+        // No manual navigate needed: AuthProvider's onAuthStateChange picks
+        // up the new session, `token` becomes truthy, and the redirect
+        // above kicks in on re-render.
       } else {
-        // Custom backend registration — expects { token, user } back
-        const session = await api.register({ name, email, password });
-        persist(session);
-        navigate("/");
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { full_name: name },
+          },
+        });
+        if (error) throw new Error(error.message);
+
+        if (!data.session) {
+          // Email confirmation is required before a session exists.
+          setError("Account created! Please check your email to confirm your account.");
+        }
+        // If a session did come back, the redirect above handles it once
+        // AuthProvider's listener updates the context.
       }
     } catch (err) {
       setError(err.message);
