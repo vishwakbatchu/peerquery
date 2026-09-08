@@ -1,53 +1,44 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { api } from "./api";
+import { supabase } from "./supabase";
 
 const AuthContext = createContext(null);
 
-const TOKEN_KEY = "studycopilot_token";
-const USER_KEY = "studycopilot_user";
-
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
-  const [user, setUser] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(USER_KEY) || "null");
-    } catch {
-      return null;
-    }
-  });
-  const [loading, setLoading] = useState(!!token);
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!token) {
+    // Get whatever session Supabase already has persisted (it manages its
+    // own storage under the hood — we don't need to touch localStorage).
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
       setLoading(false);
-      return;
-    }
-    api
-      .me(token)
-      .then(({ user: u }) => {
-        setUser(u);
-        localStorage.setItem(USER_KEY, JSON.stringify(u));
-      })
-      .catch(() => logout())
-      .finally(() => setLoading(false));
-  }, [token]);
+    });
 
-  function persist(session) {
-    setToken(session.token);
-    setUser(session.user);
-    localStorage.setItem(TOKEN_KEY, session.token);
-    localStorage.setItem(USER_KEY, JSON.stringify(session.user));
-  }
+    // Keep in sync with sign-in, sign-out, and token refresh events.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   function logout() {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    supabase.auth.signOut();
   }
 
   return (
-    <AuthContext.Provider value={{ token, user, loading, persist, logout }}>
+    <AuthContext.Provider
+      value={{
+        token: session?.access_token ?? null,
+        user: session?.user ?? null,
+        loading,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
