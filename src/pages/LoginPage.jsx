@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { supabase } from "../lib/supabase"; // Make sure your Supabase client file is imported here
+import { api } from "../lib/api";
 import { COLORS } from "../lib/theme";
 import { PrimaryButton } from "../components/UI";
 
@@ -24,41 +24,15 @@ export default function LoginPage() {
 
     try {
       if (mode === "login") {
-        // Supabase Direct Login
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (error) throw new Error(error.message);
-
-        // Store session token and navigate
-        if (data.session) {
-          persist(data.session.access_token);
-          navigate("/");
-        }
+        // Custom backend login — expects { token, user } back
+        const session = await api.login({ email, password });
+        persist(session);
+        navigate("/");
       } else {
-        // Supabase Direct Sign-Up
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: 'https://peerquery.vercel.app/login',
-            data: {
-              full_name: name,
-            },
-          },
-        });
-
-        if (error) throw new Error(error.message);
-
-        if (data.session) {
-          persist(data.session.access_token);
-          navigate("/");
-        } else {
-          // If email confirmation is enabled in Supabase Dashboard
-          setError("Account created! Please check your email to confirm your account.");
-        }
+        // Custom backend registration — expects { token, user } back
+        const session = await api.register({ name, email, password });
+        persist(session);
+        navigate("/");
       }
     } catch (err) {
       setError(err.message);
