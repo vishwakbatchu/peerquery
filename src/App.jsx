@@ -1,3 +1,15 @@
+import { supabase } from './lib/supabase'
+async function getTableData() {
+  const { data, error } = await supabase
+    .from('posts') // Replace 'your_table_name' with your actual table name in Supabase
+    .select('*')
+
+  if (error) {
+    console.error('Error fetching data:', error)
+  } else {
+    console.log('Fetched data:', data)
+  }
+} 
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./lib/auth";
 import LoginPage from "./pages/LoginPage";
