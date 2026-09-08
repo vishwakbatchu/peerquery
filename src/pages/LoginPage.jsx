@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { api } from "../lib/api";
+import { supabase } from "../lib/supabase"; // Make sure your Supabase client file is imported here
 import { COLORS } from "../lib/theme";
 import { PrimaryButton } from "../components/UI";
 
@@ -21,13 +21,44 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
+
     try {
-      const session =
-        mode === "login"
-          ? await api.login({ email, password })
-          : await api.register({ email, password, name });
-      persist(session);
-      navigate("/");
+      if (mode === "login") {
+        // Supabase Direct Login
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) throw new Error(error.message);
+
+        // Store session token and navigate
+        if (data.session) {
+          persist(data.session.access_token);
+          navigate("/");
+        }
+      } else {
+        // Supabase Direct Sign-Up
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: name,
+            },
+          },
+        });
+
+        if (error) throw new Error(error.message);
+
+        if (data.session) {
+          persist(data.session.access_token);
+          navigate("/");
+        } else {
+          // If email confirmation is enabled in Supabase Dashboard
+          setError("Account created! Please check your email to confirm your account.");
+        }
+      }
     } catch (err) {
       setError(err.message);
     } finally {
