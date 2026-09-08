@@ -43,6 +43,7 @@ export default function LoginPage() {
           email,
           password,
           options: {
+            emailRedirectTo: 'https://peerquery.vercel.app/login',
             data: {
               full_name: name,
             },
