@@ -6,7 +6,6 @@ import TutorPage from "./pages/TutorPage";
 
 function PrivateRoute({ children }) {
   const { token, loading } = useAuth();
-
   if (loading) {
     return (
       <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
@@ -14,7 +13,6 @@ function PrivateRoute({ children }) {
       </div>
     );
   }
-
   return token ? children : <Navigate to="/login" replace />;
 }
 
