@@ -1,50 +1,42 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { supabase } from "../lib/supabase";
-import { COLORS } from "../lib/theme";
-import { PrimaryButton } from "../components/UI";
 
 export default function LoginPage() {
-  const { token } = useAuth();
-  const [mode, setMode] = useState("login");
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const { setAuth } = useAuth();
+  const navigate = useNavigate();
 
-  if (token) return <Navigate to="/" replace />;
-
-  async function submit(e) {
+  async function handleAuth(e) {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
-      if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw new Error(error.message);
-        // No manual navigate needed: AuthProvider's onAuthStateChange picks
-        // up the new session, `token` becomes truthy, and the redirect
-        // above kicks in on re-render.
-      } else {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { full_name: name },
-          },
-        });
-        if (error) throw new Error(error.message);
+      const endpoint = isSignUp ? "/api/auth/register" : "/api/auth/login";
+      const body = isSignUp
+        ? { email, password, name }
+        : { email, password };
 
-        if (!data.session) {
-          // Email confirmation is required before a session exists.
-          setError("Account created! Please check your email to confirm your account.");
-        }
-        // If a session did come back, the redirect above handles it once
-        // AuthProvider's listener updates the context.
+      const res = await fetch(`http://localhost:3001${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Auth failed");
       }
+
+      const { token, user } = await res.json();
+      setAuth(token, user);
+      navigate("/dashboard");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -53,118 +45,45 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        padding: 24,
-        background: COLORS.paper,
-      }}
-    >
-      <div style={{ width: "100%", maxWidth: 420 }}>
-        <div
-          style={{
-            fontFamily: "'Source Serif 4', serif",
-            fontSize: 32,
-            fontWeight: 600,
-            color: COLORS.ink,
-            marginBottom: 8,
-          }}
-        >
-          StudyCopilot
-        </div>
-        <p style={{ color: COLORS.textMuted, margin: "0 0 28px", lineHeight: 1.6 }}>
-          Your adaptive AI tutor — understand tricky concepts, practise with targeted questions, and retain them over
-          time.
-        </p>
-
-        <div
-          style={{
-            background: "#fff",
-            border: `1px solid ${COLORS.line}`,
-            borderRadius: 12,
-            padding: 28,
-          }}
-        >
-          <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-            {["login", "register"].map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMode(m)}
-                style={{
-                  flex: 1,
-                  padding: "10px 0",
-                  borderRadius: 8,
-                  border: `1.5px solid ${mode === m ? COLORS.gold : COLORS.line}`,
-                  background: mode === m ? "#fff" : COLORS.paperDeep,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  color: mode === m ? COLORS.goldDeep : COLORS.textMuted,
-                }}
-              >
-                {m === "login" ? "Log in" : "Sign up"}
-              </button>
-            ))}
-          </div>
-
-          <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {mode === "register" && (
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 14, fontWeight: 600 }}>
-                Name
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
-                  style={inputStyle}
-                />
-              </label>
-            )}
-            <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 14, fontWeight: 600 }}>
-              Email
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@school.edu"
-                style={inputStyle}
-              />
-            </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 14, fontWeight: 600 }}>
-              Password
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 6 characters"
-                style={inputStyle}
-              />
-            </label>
-
-            {error && <div style={{ color: COLORS.wine, fontSize: 13.5 }}>{error}</div>}
-
-            <PrimaryButton type="submit" disabled={loading} style={{ width: "100%", marginTop: 4 }}>
-              {loading ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}
-            </PrimaryButton>
-          </form>
-        </div>
-
-        <p style={{ marginTop: 20, fontSize: 13, color: COLORS.textMuted, textAlign: "center" }}>
-          Demo works without an API key — add <code>ANTHROPIC_API_KEY</code> in <code>.env</code> for live AI.
-        </p>
-      </div>
+    <div style={{ maxWidth: "400px", margin: "50px auto", padding: "20px" }}>
+      <h1>{isSignUp ? "Sign Up" : "Login"}</h1>
+      {error && <div style={{ color: "red", marginBottom: "10px" }}>{error}</div>}
+      <form onSubmit={handleAuth}>
+        {isSignUp && (
+          <input
+            type="text"
+            placeholder="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            style={{ width: "100%", marginBottom: "10px", padding: "8px" }}
+          />
+        )}
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ width: "100%", marginBottom: "10px", padding: "8px" }}
+          required
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          style={{ width: "100%", marginBottom: "10px", padding: "8px" }}
+          required
+        />
+        <button type="submit" disabled={loading} style={{ width: "100%", padding: "8px" }}>
+          {loading ? "Loading..." : isSignUp ? "Sign Up" : "Login"}
+        </button>
+      </form>
+      <button
+        onClick={() => setIsSignUp(!isSignUp)}
+        style={{ width: "100%", marginTop: "10px", padding: "8px" }}
+      >
+        {isSignUp ? "Already have an account? Login" : "Need an account? Sign Up"}
+      </button>
     </div>
   );
 }
-
-const inputStyle = {
-  padding: "11px 12px",
-  borderRadius: 8,
-  border: `1.5px solid ${COLORS.line}`,
-  fontSize: 14,
-  fontWeight: 400,
-};

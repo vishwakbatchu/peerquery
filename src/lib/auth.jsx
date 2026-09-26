@@ -1,42 +1,34 @@
-import { createContext, useContext, useEffect, useState } from "react";
-
+import { createContext, useContext, useState } from "react";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Get whatever session Supabase already has persisted (it manages its
-    // own storage under the hood — we don't need to touch localStorage).
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    // Keep in sync with sign-in, sign-out, and token refresh events.
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   function logout() {
-    supabase.auth.signOut();
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("authUser");
+    setToken(null);
+    setUser(null);
+  }
+
+  function setAuth(authToken, authUser) {
+    setToken(authToken);
+    setUser(authUser);
+    localStorage.setItem("authToken", authToken);
+    localStorage.setItem("authUser", JSON.stringify(authUser));
   }
 
   return (
     <AuthContext.Provider
       value={{
-        token: session?.access_token ?? null,
-        user: session?.user ?? null,
+        token,
+        user,
         loading,
         logout,
+        setAuth,
       }}
     >
       {children}
