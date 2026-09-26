@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import { connectDB, disconnectDB } from "./db.js";
 import { getUsers, saveUsers, getConcepts, saveConcepts, getChatHistory, saveChatHistory } from "./store.js";
 import { diagnose, explain, generateQuestions, chatReply, hasAI } from "./ai.js";
 
@@ -16,6 +17,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const API_KEY = process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY;
+const MONGODB_URI = process.env.MONGODB_URI;
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -38,65 +40,91 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.post("/api/auth/register", async (req, res) => {
-  const { email, password, name } = req.body;
-  if (!email?.trim() || !password || password.length < 6) {
-    return res.status(400).json({ error: "Email and password (6+ chars) required" });
+  try {
+    const { email, password, name } = req.body;
+    if (!email?.trim() || !password || password.length < 6) {
+      return res.status(400).json({ error: "Email and password (6+ chars) required" });
+    }
+
+    const users = await getUsers();
+    const key = email.trim().toLowerCase();
+    if (users[key]) {
+      return res.status(409).json({ error: "Account already exists" });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+    users[key] = {
+      id: key,
+      email: key,
+      name: name?.trim() || key.split("@")[0],
+      passwordHash: hash,
+      createdAt: new Date().toISOString(),
+    };
+    await saveUsers(users);
+
+    const token = jwt.sign({ id: key, email: key, name: users[key].name }, JWT_SECRET, { expiresIn: "7d" });
+    res.json({ token, user: { id: key, email: key, name: users[key].name } });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Registration failed" });
   }
-
-  const users = getUsers();
-  const key = email.trim().toLowerCase();
-  if (users[key]) {
-    return res.status(409).json({ error: "Account already exists" });
-  }
-
-  const hash = await bcrypt.hash(password, 10);
-  users[key] = {
-    id: key,
-    email: key,
-    name: name?.trim() || key.split("@")[0],
-    passwordHash: hash,
-    createdAt: new Date().toISOString(),
-  };
-  saveUsers(users);
-
-  const token = jwt.sign({ id: key, email: key, name: users[key].name }, JWT_SECRET, { expiresIn: "7d" });
-  res.json({ token, user: { id: key, email: key, name: users[key].name } });
 });
 
 app.post("/api/auth/login", async (req, res) => {
-  const { email, password } = req.body;
-  const key = email?.trim().toLowerCase();
-  const users = getUsers();
-  const user = users[key];
+  try {
+    const { email, password } = req.body;
+    const key = email?.trim().toLowerCase();
+    const users = await getUsers();
+    const user = users[key];
 
-  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-    return res.status(401).json({ error: "Invalid email or password" });
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
+
+    const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: "7d" });
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Login failed" });
   }
-
-  const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: "7d" });
-  res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
 });
 
 app.get("/api/me", authMiddleware, (req, res) => {
   res.json({ user: req.user });
 });
 
-app.get("/api/concepts", authMiddleware, (req, res) => {
-  res.json({ concepts: getConcepts(req.user.id) });
+app.get("/api/concepts", authMiddleware, async (req, res) => {
+  try {
+    const concepts = await getConcepts(req.user.id);
+    res.json({ concepts });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Failed to get concepts" });
+  }
 });
 
-app.put("/api/concepts", authMiddleware, (req, res) => {
-  saveConcepts(req.user.id, req.body.concepts || {});
-  res.json({ ok: true });
+app.put("/api/concepts", authMiddleware, async (req, res) => {
+  try {
+    await saveConcepts(req.user.id, req.body.concepts || {});
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Failed to save concepts" });
+  }
 });
 
-app.get("/api/chat", authMiddleware, (req, res) => {
-  res.json({ messages: getChatHistory(req.user.id) });
+app.get("/api/chat", authMiddleware, async (req, res) => {
+  try {
+    const messages = await getChatHistory(req.user.id);
+    res.json({ messages });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Failed to get chat history" });
+  }
 });
 
-app.put("/api/chat", authMiddleware, (req, res) => {
-  saveChatHistory(req.user.id, req.body.messages || []);
-  res.json({ ok: true });
+app.put("/api/chat", authMiddleware, async (req, res) => {
+  try {
+    await saveChatHistory(req.user.id, req.body.messages || []);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Failed to save chat history" });
+  }
 });
 
 app.post("/api/ai/diagnose", authMiddleware, async (req, res) => {
@@ -144,13 +172,38 @@ if (fs.existsSync(distPath)) {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`StudyCopilot API on http://localhost:${PORT}`);
-  if (!hasAI(API_KEY)) {
-    console.log("No GROQ_API_KEY or ANTHROPIC_API_KEY — running in demo mode");
-  } else if (API_KEY && API_KEY.startsWith("gsk_")) {
-    console.log("Using Groq (free tier)");
-  } else {
-    console.log("Using Anthropic Claude");
+// Start server
+async function startServer() {
+  try {
+    // Connect to MongoDB if URI is provided
+    if (MONGODB_URI) {
+      await connectDB(MONGODB_URI);
+      console.log("✓ MongoDB connected");
+    } else {
+      console.warn("⚠ MONGODB_URI not set - database operations will fail");
+    }
+
+    app.listen(PORT, () => {
+      console.log(`✓ StudyCopilot API on http://localhost:${PORT}`);
+      if (!hasAI(API_KEY)) {
+        console.log("⚠ No GROQ_API_KEY or ANTHROPIC_API_KEY — running in demo mode");
+      } else if (API_KEY && API_KEY.startsWith("gsk_")) {
+        console.log("✓ Using Groq (free tier)");
+      } else {
+        console.log("✓ Using Anthropic Claude");
+      }
+    });
+
+    // Handle graceful shutdown
+    process.on("SIGINT", async () => {
+      console.log("\nShutting down gracefully...");
+      await disconnectDB();
+      process.exit(0);
+    });
+  } catch (error) {
+    console.error("Failed to start server:", error.message);
+    process.exit(1);
   }
-});
+}
+
+startServer();
