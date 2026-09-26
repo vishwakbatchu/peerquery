@@ -22,6 +22,7 @@ async function apiCall(endpoint, options = {}) {
 }
 
 export const api = {
+  health: () => apiCall('/api/health'),
   getConcepts: () => apiCall('/api/concepts'),
   saveConcepts: (concepts) => apiCall('/api/concepts', { method: 'PUT', body: JSON.stringify({ concepts }) }),
   getChatHistory: () => apiCall('/api/chat'),
