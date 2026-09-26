@@ -1,4 +1,3 @@
-cat > server/db.js << 'EOF'
 import { MongoClient } from "mongodb";
 
 let client = null;
@@ -42,4 +41,3 @@ export async function disconnectDB() {
     console.log("Disconnected from MongoDB");
   }
 }
-EOF
