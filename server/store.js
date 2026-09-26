@@ -1,4 +1,3 @@
-cat > server/store.js << 'EOF'
 import { getDB } from "./db.js";
 
 // Users collection: stores user documents with email as the key
@@ -70,4 +69,3 @@ export async function saveChatHistory(userId, messages) {
     { upsert: true }
   );
 }
-EOF
