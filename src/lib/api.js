@@ -2,7 +2,7 @@ const API_BASE = typeof window !== 'undefined' && window.location.hostname === '
   ? 'http://localhost:3001'
   : '';
 
-export async function apiCall(endpoint, options = {}) {
+async function apiCall(endpoint, options = {}) {
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers: {
@@ -18,3 +18,5 @@ export async function apiCall(endpoint, options = {}) {
 
   return res.json();
 }
+
+export const api = { apiCall };
