@@ -15,7 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
-const API_KEY = process.env.ANTHROPIC_API_KEY;
+const API_KEY = process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY;
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -143,15 +143,13 @@ if (fs.existsSync(distPath)) {
     res.sendFile(path.join(distPath, "index.html"));
   });
 }
-
 app.listen(PORT, () => {
   console.log(`StudyCopilot API on http://localhost:${PORT}`);
   if (!hasAI(API_KEY)) {
-  console.log("No GROQ_API_KEY or ANTHROPIC_API_KEY — running in demo mode");
-} else if (API_KEY.startsWith("gsk_")) {
-  console.log("Using Groq (free tier)");
-} else {
-  console.log("Using Anthropic Claude");
-}
+    console.log("No GROQ_API_KEY or ANTHROPIC_API_KEY — running in demo mode");
+  } else if (API_KEY.startsWith("gsk_")) {
+    console.log("Using Groq (free tier)");
+  } else {
+    console.log("Using Anthropic Claude");
   }
 });
