@@ -42,7 +42,7 @@ const DEMO = {
   chat: "Great question! In short: light reactions capture energy and make ATP/NADPH; the Calvin cycle uses that energy to build sugar from CO₂. Want a diagram or a practice question on this?",
 };
 
-function extractText(data) {
+function extractTextClaude(data) {
   return (data.content || [])
     .map((b) => (b.type === "text" ? b.text : ""))
     .filter(Boolean)
@@ -57,6 +57,30 @@ function parseJSON(text) {
   if (startArr !== -1 && (startObj === -1 || startArr < startObj)) sliceStart = startArr;
   const jsonSlice = sliceStart >= 0 ? cleaned.slice(sliceStart) : cleaned;
   return JSON.parse(jsonSlice);
+}
+
+async function callGroq(apiKey, prompt, maxTokens = 1200) {
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "openai/gpt-oss-120b",   // good free model
+      max_tokens: maxTokens,
+      temperature: 0.4,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(err || "Groq request failed");
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || "";
 }
 
 async function callClaude(apiKey, prompt, maxTokens = 1200) {
@@ -80,7 +104,15 @@ async function callClaude(apiKey, prompt, maxTokens = 1200) {
   }
 
   const data = await response.json();
-  return extractText(data);
+  return extractTextClaude(data);
+}
+
+async function callAI(apiKey, prompt, maxTokens = 1200) {
+  // Prefer Groq if key looks like a Groq key
+  if (apiKey?.startsWith("gsk_")) {
+    return callGroq(apiKey, prompt, maxTokens);
+  }
+  return callClaude(apiKey, prompt, maxTokens);
 }
 
 export function hasAI(apiKey) {
@@ -96,7 +128,7 @@ export async function diagnose(apiKey, inputText) {
 Respond ONLY with JSON:
 {"concept_key":"snake_case_id","concept_label":"Short name","misconception":"One specific gap","level":"beginner|shaky|almost there"}`;
 
-  const text = await callClaude(apiKey, prompt, 400);
+  const text = await callAI(apiKey, prompt, 400);
   return parseJSON(text);
 }
 
@@ -127,7 +159,7 @@ Respond ONLY with JSON:
   }
 }`;
 
-  const text = await callClaude(apiKey, prompt, 1400);
+  const text = await callAI(apiKey, prompt, 1400);
   return parseJSON(text);
 }
 
@@ -140,7 +172,7 @@ Misconception to target: ${misconception}
 Write 3 multiple-choice questions (4 options each). Respond ONLY with JSON array:
 [{"question":"...","options":["a","b","c","d"],"correct_index":0,"why":"one sentence"}]`;
 
-  const text = await callClaude(apiKey, prompt, 1200);
+  const text = await callAI(apiKey, prompt, 1200);
   return parseJSON(text);
 }
 
@@ -163,6 +195,6 @@ Respond ONLY with JSON:
   "visual": null OR same visual schema as before (chart or diagram) if it helps
 }`;
 
-  const text = await callClaude(apiKey, prompt, 900);
+  const text = await callAI(apiKey, prompt, 900);
   return parseJSON(text);
 }
