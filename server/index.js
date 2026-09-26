@@ -147,6 +147,11 @@ if (fs.existsSync(distPath)) {
 app.listen(PORT, () => {
   console.log(`StudyCopilot API on http://localhost:${PORT}`);
   if (!hasAI(API_KEY)) {
-    console.log("No ANTHROPIC_API_KEY — running in demo mode with sample responses");
+  console.log("No GROQ_API_KEY or ANTHROPIC_API_KEY — running in demo mode");
+} else if (API_KEY.startsWith("gsk_")) {
+  console.log("Using Groq (free tier)");
+} else {
+  console.log("Using Anthropic Claude");
+}
   }
 });
